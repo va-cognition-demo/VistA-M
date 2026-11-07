@@ -140,17 +140,17 @@ PRSB(P) ;Parse Parameter information
 CALLP(XWBP,P,DEBUG) ;make API call using Protocol string
  ;ERR will be 0 or "-1^text"
  N ERR,S
- S ERR=0
+ S ERR=0 K XWB("BADPARAM")
  IF '$D(DEBUG) S DEBUG=0
  ;IF 'DEBUG D:$D(XRTL) T0^%ZOSV ;start RTL
  S ERR=$$PRSP(P)
  IF '+ERR S ERR=$$PRSM(XWB(0,"MESG"))
  IF '+ERR S ERR=$$PRSA(XWB(1,"TEXT")) I $G(XWB(2,"CAPI"))="XUS SET SHARED" S XWBSHARE=1 Q
  I +ERR S XWBSEC=$P(ERR,U,2) ;P10 -- dpc
- IF '+ERR S S=$$PRSB(XWB(2,"PARM"))
- ;Check OK
+ ;Check the RPC is allowed to run before any parameter is parsed
  I '+ERR D CHKPRMIT^XWBSEC(XWB(2,"CAPI")) ;checks if RPC allowed to run
  S:$L($G(XWBSEC)) ERR="-1^"_XWBSEC
+ IF '+ERR S S=$$PRSB(XWB(2,"PARM")) I $D(XWB("BADPARAM")) S XWBSEC="Invalid parameter",ERR="-1^"_XWBSEC
  ;IF 'DEBUG S:$D(XRT0) XRTN="RPC BROKER READ/PARSE" D:$D(XRT0) T1^%ZOSV ;stop RTL
  IF '+ERR,(+S=0)!(+S>0) D
  . ;Logging
@@ -163,48 +163,16 @@ CALLP(XWBP,P,DEBUG) ;make API call using Protocol string
  ;
 LINST(A,X,XWBY) ;instantiate local array
  IF XWBY=$C(1) S XWBY=""
+ I '$$LITS^XWBPRS(X) S XWB("BADPARAM")=1 Q
  S X=A_"("_X_")"
  S @X=XWBY
  Q
-GINST ;instantiate global
- N DONE,N,T,T1
- S (DONE,I)=0
- ;find piece with global ref - recover $C(44)
- S REF=$TR(REF,$C(23),$C(44))
- F  D  Q:DONE
- . S N=$NA(^TMP("XWB",$J,$P($H,",",2)))
- . S XWB("FRM")=REF
- . S XWB("TO")=N
- . IF '$D(@N) S DONE=1 Q
- ;loop through all and instantiate
- S DONE=0
- F  D  Q:DONE
- . S T=$E(@REF@(I),4,M)
- . IF T="" S DONE=1 Q
- . S @N@("XWB")="" ;set naked indicator
- . S @T
- . S I=I+1
- K @N@("XWB")
+GINST ;global list parameters are not supported by this parser
+ S XWB("BADPARAM")=1
  Q
  ;
 GETV(V) ;get value of V - reference parameter
- N X
- S X=V
- IF $E(X,1,2)="$$" Q ""
- IF $C(34,36)[$E(V) X "S V="_$$VCHK(V)
- E  S V=@V
- Q V
- ;
-VCHK(S) ;Parse string for first argument
- N C,I,P
- F I=1:1 S C=$E(S,I) D VCHKP:C="(",VCHKQ:C=$C(34) Q:" ,"[C
- Q $E(S,1,I-1)
-VCHKP S P=1 ;Find closing paren
- F I=I+1:1 S C=$E(S,I) Q:P=0!(C="")  I "()"""[C D VCHKQ:C=$C(34) S P=P+$S("("[C:1,")"[C:-1,1:0)
- Q
-VCHKQ ;Find closing quote
- F I=I+1:1 S C=$E(S,I) Q:C=""!(C=$C(34))
- Q
+ Q $$GETV^XWBPRS(V)
 CLRBUF ;p10  Empties Input buffer
  N %
  F  R %#1:XWBTIME(1) Q:%=""
