@@ -25,12 +25,12 @@ VARVAL(RESULT,VARIABLE) ;RPC. XWB GET VARIABLE VALUE
  ;Controlled subscription, IA#1629
  N X
  ;If sign-on Level of Assurance is low, deny access to data (OMB 04-04 and NIST SP 800-63-2)
- I $G(DUZ("LOA"))<2 H 1 ;S RESULT="" Q  ;Not fully implemented on all interfaces
+ I $G(DUZ("LOA"))<2 S RESULT="" Q  ;Not fully implemented on all interfaces
  S X=$$UP^XLFSTR(VARIABLE)
- I X["$G(^" H 1 ;S RESULT="" Q  ;Close security hole
- I X["$GET(^" H 1 ;S RESULT="" Q  ;Close security hole
- I X["$O(^" H 1 ;S RESULT="" Q  ;Close security hole
- I X["$ORDER(^" H 1 ;S RESULT="" Q  ;Close security hole
+ I X["$G(^" S RESULT="" Q  ;Close security hole
+ I X["$GET(^" S RESULT="" Q  ;Close security hole
+ I X["$O(^" S RESULT="" Q  ;Close security hole
+ I X["$ORDER(^" S RESULT="" Q  ;Close security hole
  S RESULT=VARIABLE
  Q
  ;

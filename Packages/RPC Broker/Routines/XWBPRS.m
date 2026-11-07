@@ -12,6 +12,7 @@ CALLP(XWBP,XWBDEBUG) ;make API call using Protocol string
  I '+ERR S ERR=$$RPC ;Check the RPC
  I +ERR S XWBSEC=$P(ERR,U,2) ;P10 -- dpc
  I '+ERR D CHKPRMIT^XWBSEC($G(XWB(2,"RPC"))) ;checks if RPC allowed to run
+ I '+ERR,'$L($G(XWBSEC)) S ERR=$$PCHK I +ERR S XWBSEC=$P(ERR,U,2)
  S:$L($G(XWBSEC)) ERR="-1^"_XWBSEC
  I '+ERR D
  . D CAPI(.XWBP,XWB("PARAM"))
@@ -87,9 +88,9 @@ PRS5() ;Parse Data Parameter chunk
  . . D LREAD("VA")
  . . S XWB(R,"P",IX)=VA(1) D PARAM($NA(XWB(R,"P",IX)))
  . . Q
- . IF TY=1 D  Q  ;reference
+ . IF TY=1 D  Q  ;reference - evaluated by PCHK after CHKPRMIT
  . . D LREAD("VA")
- . . S XWB(R,"P",IX)=$$GETV(VA(1)) D PARAM($NA(XWB(R,"P",IX)))
+ . . S XWB(R,"P",IX)=VA(1),XWB(R,"REF",IX)="" D PARAM($NA(XWB(R,"P",IX)))
  . . Q
  . IF TY=2 D  Q  ;list
  . . I CONT'="t" D
@@ -119,6 +120,11 @@ PARAM(NA) ;Add a new parameter to the list
  S A=A_$S($L(A):",",1:"")_$S(TY=3:"$NA(",1:"")_NA_$S(TY=3:")",1:"")
  S XWB("PARAM")=A
  Q
+PCHK() ;ef, evaluate reference parameters once the RPC is permitted
+ N IX
+ S IX="" F  S IX=$O(XWB(5,"REF",IX)) Q:IX=""  S XWB(5,"P",IX)=$$GETV(XWB(5,"P",IX))
+ I $D(XWB("BADPARAM")) Q "-1^Invalid parameter"
+ Q 0
  ;
 RPC() ;Check the rpc information.
  ;M Extrinsic Function
@@ -154,6 +160,7 @@ LREAD(ROOT) ;Read a L_PACK
  ;X can be something like '"TEXT",1,0'.
 LINST(A,X,XWBY) ;instantiate local array
  IF XWBY=$C(1) S XWBY=""
+ I '$$LITS(X) S XWB("BADPARAM")=1 Q
  S X=A_"("_X_")"
  S @X=XWBY
  Q
@@ -162,28 +169,36 @@ LINST(A,X,XWBY) ;instantiate local array
 GINST(R,S,V) ;instantiate global
  N N
  I V=$C(1) S V=""
+ I '$$LITS(S) S XWB("BADPARAM")=1 Q
  S N=$P(R,")")_","_S_")"
  S @N=V
  Q
  ;
 GETV(V) ;get value of V - reference parameter
- N X
- S X=V
- IF $E(X,1,2)="$$" Q ""
- IF $C(34,36)[$E(V) X "S V="_$$VCHK(V)
- E  S V=@V
- Q V
+ ;Only a local variable name with literal subscripts is accepted
+ I '$$VREF(V) S XWB("BADPARAM")=1 Q ""
+ Q $G(@V)
  ;
-VCHK(S) ;Parse string for first argument
- N C,I,P
- F I=1:1 S C=$E(S,I) D VCHKP:C="(",VCHKQ:C=$C(34) Q:" ,"[C
- Q $E(S,1,I-1)
-VCHKP S P=1 ;Find closing paren
- F I=I+1:1 S C=$E(S,I) Q:P=0!(C="")  I "()"""[C D VCHKQ:C=$C(34) S P=P+$S("("[C:1,")"[C:-1,1:0)
- Q
-VCHKQ ;Find closing quote
- F I=I+1:1 S C=$E(S,I) Q:C=""!(C=$C(34))
- Q
+VREF(V) ;ef, 1 if V is a local variable name with only literal subscripts
+ N NM
+ S NM=$P(V,"(")
+ I NM'?1(1A,1"%").AN Q 0
+ I NM=V Q 1
+ I $E(V,$L(V))'=")" Q 0
+ Q $$LITS($E(V,$L(NM)+2,$L(V)-1))
+ ;
+LITS(S) ;ef, 1 if S is a comma-separated list of numeric or string literals
+ N P
+ F  S P=$$LIT(S) Q:'P  Q:P>$L(S)  Q:$E(S,P)'=","  S S=$E(S,P+1,$L(S))
+ Q P>$L(S)
+ ;
+LIT(S) ;ef, position after the numeric or string literal at the start of S, 0 if none
+ N C,I,T
+ I $E(S)="""" D  Q $S(C="":0,1:I+1)
+ . F I=2:1 S C=$E(S,I) Q:C=""  I C="""" Q:$E(S,I+1)'=""""  S I=I+1
+ S T=$P(S,",")
+ I (T?.1"-"1.N)!(T?.1"-".N1"."1.N) Q $L(T)+1
+ Q 0
 CLRBUF ;Empties Input buffer
  N %
  F  R *%:2 Q:'$T!(%=4)  ;!(%=-1)
